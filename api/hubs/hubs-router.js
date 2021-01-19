@@ -5,7 +5,33 @@ const Messages = require('../messages/messages-model.js');
 
 const router = express.Router();
 
-router.get('/', (req, res) => {
+const validateId=(req,res,next)=>{
+  const {id} = req.params
+  Hubs.findById(id)
+  .then(data=>{
+    //tack the hub to the req for downstream
+    if(data){
+      req.hub=data;
+      console.log('req.hub=',req.hub)
+      next(); //to travel next with the hub attached to req
+    }else{
+      //shortcircuit everything and respond to client
+      next({code: 400, message :'There is no such id ' + id});
+    }
+  })
+  .catch(err=>{
+    console.log(err.message);
+    // res.status(500).json({message: 'Oops something went wrong!' + id})
+    next({code: 500, message:'The Id could not be found'})
+  })
+ 
+}
+router.use ((req,res,next)=>{
+console.log('inside rouer');
+next();
+});
+
+router.get('/', (req, res,next) => {
   Hubs.find(req.query)
     .then(hubs => {
       res.status(200).json(hubs);
@@ -13,28 +39,30 @@ router.get('/', (req, res) => {
     .catch(error => {
       // log error to server
       console.log(error);
-      res.status(500).json({
-        message: 'Error retrieving the hubs',
-      });
+      // res.status(500).json({
+      //   message: 'Error retrieving the hubs',
+      // });
+      next('Error retrieving the hubs ')
     });
 });
 
-router.get('/:id', (req, res) => {
-  Hubs.findById(req.params.id)
-    .then(hub => {
-      if (hub) {
-        res.status(200).json(hub);
-      } else {
-        res.status(404).json({ message: 'Hub not found' });
-      }
-    })
-    .catch(error => {
-      // log error to server
-      console.log(error);
-      res.status(500).json({
-        message: 'Error retrieving the hub',
-      });
-    });
+router.get('/:id', [validateId], (req, res) => {
+  // Hubs.findById(req.params.id)
+  //   .then(hub => {
+  //     if (hub) {
+         res.status(200).json(req.hub);
+         next();
+  //     } else {
+  //       res.status(404).json({ message: 'Hub not found' });
+  //     }
+  //   })
+  //   .catch(error => {
+  //     // log error to server
+  //     console.log(error);
+  //     res.status(500).json({
+  //       message: 'Error retrieving the hub',
+  //     });
+  //   });
 });
 
 router.post('/', (req, res) => {
@@ -116,5 +144,9 @@ router.post('/:id/messages', (req, res) => {
       });
     });
 });
+
+router.use((err,req,res,next)=>{
+  res.status(err.code).json({message : err.message})
+})
 
 module.exports = router;
